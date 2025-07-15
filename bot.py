@@ -2,9 +2,16 @@ import discord
 from discord.ext import commands
 import youtube_dl
 import asyncio
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file (for local testing)
+load_dotenv()
 
 # Bot setup
-bot = commands.Bot(command_prefix='!', intents=discord.Intents.all())
+intents = discord.Intents.default()
+intents.message_content = True
+bot = commands.Bot(command_prefix='!', intents=intents)
 
 # Suppress noise about console usage from youtube-dl
 youtube_dl.utils.bug_reports_message = lambda: ''
@@ -49,39 +56,39 @@ class YTDLSource(discord.PCMVolumeTransformer):
 
 @bot.event
 async def on_ready():
-    print(f'Logged in as {bot.user.name}')
+    print(f'Logged in as {bot.user.name} (ID: {bot.user.id})')
     await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name="!help"))
 
 @bot.command()
 async def play(ctx, *, url):
-    """Plays from a url (almost anything youtube_dl supports)"""
+    """Plays from a URL (YouTube, SoundCloud, etc.)"""
     
-    if not ctx.message.author.voice:
-        await ctx.send("You are not connected to a voice channel")
+    if not ctx.author.voice:
+        await ctx.send("You're not in a voice channel!")
         return
     
-    channel = ctx.message.author.voice.channel
+    channel = ctx.author.voice.channel
     
     if ctx.voice_client:
         await ctx.voice_client.move_to(channel)
     else:
-        voice_client = await channel.connect()
+        await channel.connect()
     
     async with ctx.typing():
         player = await YTDLSource.from_url(url, loop=bot.loop, stream=True)
-        ctx.voice_client.play(player, after=lambda e: print(f'Player error: {e}') if e else None)
+        ctx.voice_client.play(player, after=lambda e: print(f'Error: {e}') if e else None)
     
     await ctx.send(f'Now playing: {player.title}')
 
 @bot.command()
 async def stop(ctx):
-    """Stops and disconnects the bot from voice"""
+    """Stops playback and leaves voice channel"""
     
     if ctx.voice_client:
         await ctx.voice_client.disconnect()
         await ctx.send("Disconnected")
     else:
-        await ctx.send("I'm not connected to a voice channel")
+        await ctx.send("I'm not in a voice channel!")
 
 # Run the bot
 bot.run(os.getenv('DISCORD_TOKEN'))
